@@ -1,6 +1,8 @@
 const logger = require('../utils/logger');
 
 module.exports = (req, res, next) => {
+  if (process.env.LOG_REQUESTS === 'false') return next();
+
   const start = Date.now();
   res.on('finish', () => {
     logger.info('request', {

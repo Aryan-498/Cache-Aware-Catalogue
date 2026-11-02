@@ -1,0 +1,23 @@
+﻿{
+    "uptimeSeconds":  36,
+    "requests":  {
+                     "total":  153341,
+                     "errors5xx":  0
+                 },
+    "cache":  {
+                  "hits":  153135,
+                  "misses":  206,
+                  "bypass":  0,
+                  "down":  0,
+                  "hitRatioPercent":  99.87
+              },
+    "latencyMs":  {
+                      "averageAllRequests":  3.04,
+                      "averageReads":  3.04,
+                      "p95Reads":  7.89,
+                      "averageHit":  3.04,
+                      "averageMiss":  3.45,
+                      "averageBypass":  null
+                  },
+    "redis":  "up"
+}
