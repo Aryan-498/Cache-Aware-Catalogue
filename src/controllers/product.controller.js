@@ -23,7 +23,6 @@ const validate = (body, { partial }) => {
   return errors;
 };
 
-// Turn database constraint errors into clean 400 responses
 const handleDbError = (err, res, next) => {
   if (err.code === '23514') return res.status(400).json({ error: 'Value rejected by database constraint (price/stock must be >= 0)' });
   if (err.code === '23503') return res.status(400).json({ error: 'Invalid categoryId' });
@@ -76,6 +75,7 @@ exports.create = async (req, res, next) => {
     const errors = validate(req.body, { partial: false });
     if (errors.length) return res.status(400).json({ errors });
     const product = await service.create(req.body, req.user.username);
+    await cache.invalidateProduct(product.id);
     logger.info('product_created', { id: product.id, actor: req.user.username });
     res.status(201).json(product);
   } catch (err) {
@@ -99,6 +99,7 @@ exports.update = async (req, res, next) => {
       logger.warn('version_conflict', { id, sent: req.body.version, current: result.currentVersion });
       return res.status(409).json({ error: 'Version conflict', currentVersion: result.currentVersion });
     }
+    await cache.invalidateProduct(id);
     logger.info('product_updated', { id, version: result.product.version, actor: req.user.username });
     res.json(result.product);
   } catch (err) {
@@ -112,6 +113,7 @@ exports.remove = async (req, res, next) => {
     if (!id) return res.status(400).json({ error: 'Invalid product id' });
     const deleted = await service.remove(id, req.user.username);
     if (!deleted) return res.status(404).json({ error: 'Product not found' });
+    await cache.invalidateProduct(id);
     logger.info('product_deleted', { id, actor: req.user.username });
     res.json({ message: 'Product deleted', id });
   } catch (err) {

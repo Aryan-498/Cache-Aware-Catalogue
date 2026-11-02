@@ -10,15 +10,28 @@ const redis = new Redis(env.redisUrl, {
 });
 
 let up = false;
+let hasBeenDown = false;
 
-redis.on('ready', () => {
+redis.on('ready', async () => {
   up = true;
   logger.info('redis_up');
+  // Writes may have happened while Redis was down, so old cached copies
+  // could be stale. Clear the cache once on recovery.
+  if (hasBeenDown) {
+    hasBeenDown = false;
+    try {
+      await redis.flushdb();
+      logger.info('cache_flushed_after_recovery');
+    } catch (err) {
+      logger.warn('flush_after_recovery_failed', { error: err.message });
+    }
+  }
 });
 
 redis.on('close', () => {
   if (up) {
     up = false;
+    hasBeenDown = true;
     logger.warn('redis_down');
   }
 });

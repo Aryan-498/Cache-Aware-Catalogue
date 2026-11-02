@@ -3,17 +3,13 @@ const env = require('../config/env');
 const logger = require('../utils/logger');
 
 exports.getOrLoad = async (key, ttl, loader, { bypass = false } = {}) => {
-  // Cache switched off (env flag or ?nocache=true)
   if (!env.cacheEnabled || bypass) {
     return { value: await loader(), status: 'BYPASS' };
   }
-
-  // Redis is known to be down -> go straight to the database
   if (!isRedisUp()) {
     return { value: await loader(), status: 'DOWN' };
   }
 
-  // 1. Try the cache
   try {
     const cached = await redis.get(key);
     if (cached !== null) {
@@ -24,10 +20,8 @@ exports.getOrLoad = async (key, ttl, loader, { bypass = false } = {}) => {
     return { value: await loader(), status: 'DOWN' };
   }
 
-  // 2. Miss: load from the database
   const value = await loader();
 
-  // 3. Save a copy (never cache "not found")
   if (value !== null && value !== undefined) {
     try {
       await redis.set(key, JSON.stringify(value), 'EX', ttl);
@@ -38,4 +32,40 @@ exports.getOrLoad = async (key, ttl, loader, { bypass = false } = {}) => {
   }
 
   return { value, status: 'MISS' };
+};
+
+// Delete every key that matches a pattern (SCAN is safe on large datasets)
+const deleteByPattern = async (pattern) => {
+  let cursor = '0';
+  let removed = 0;
+  do {
+    const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = next;
+    if (keys.length) removed += await redis.del(...keys);
+  } while (cursor !== '0');
+  return removed;
+};
+
+// Called after every successful write: remove the product copy and all list copies
+exports.invalidateProduct = async (id) => {
+  if (!env.cacheEnabled) return;
+  if (!isRedisUp()) {
+    logger.warn('invalidate_skipped_redis_down', { id });
+    return; // the cache is flushed on recovery instead
+  }
+  try {
+    let removed = 0;
+    if (id) removed += await redis.del(`product:${id}`);
+    removed += await deleteByPattern('products:list:*');
+    logger.info('cache_invalidated', { id, removed });
+  } catch (err) {
+    logger.warn('invalidate_failed', { id, error: err.message });
+  }
+};
+
+exports.flushAll = async () => {
+  if (!isRedisUp()) return false;
+  await redis.flushdb();
+  logger.info('cache_flushed_manually');
+  return true;
 };
