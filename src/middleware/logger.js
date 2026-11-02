@@ -8,6 +8,7 @@ module.exports = (req, res, next) => {
       path: req.originalUrl,
       status: res.statusCode,
       durationMs: Date.now() - start,
+      cache: res.getHeader('X-Cache') || null,
       user: req.user ? req.user.username : null,
     });
   });
